@@ -1,0 +1,80 @@
+pipeline {
+    agent any
+
+    environment {
+        IMAGE_NAME = "music-genre-classification"
+        DOCKER_REGISTRY = "your-docker-registry" // Remplacez par votre registre Docker, si applicable
+    }
+
+    stages {
+        stage('Cloner le dépôt') {
+            steps {
+                checkout scm
+                echo 'Code source cloné avec succès.'
+            }
+        }
+
+        stage('Installer les dépendances') {
+            steps {
+                echo 'Installation des dépendances Python...'
+                sh 'pip install -r requirements.txt'
+            }
+        }
+
+        stage('Tester les scripts') {
+            steps {
+                echo 'Vérification de la syntaxe et tests unitaires...'
+                sh '''
+                python -m py_compile svm_service/svm.py
+                python -m py_compile vgg_service/vgg_service.py
+                '''
+            }
+        }
+
+        stage('Créer l’image Docker') {
+            steps {
+                echo 'Création de l’image Docker...'
+                sh '''
+                docker build -t ${IMAGE_NAME}:svm -f svm_service/Dockerfile .
+                docker build -t ${IMAGE_NAME}:vgg -f vgg_service/Dockerfile .
+                '''
+            }
+        }
+
+        stage('Pousser l’image Docker (si nécessaire)') {
+            when {
+                expression { return env.DOCKER_REGISTRY != "" }
+            }
+            steps {
+                echo 'Connexion au registre Docker...'
+                sh 'docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD $DOCKER_REGISTRY'
+                echo 'Pousser les images Docker vers le registre...'
+                sh '''
+                docker tag ${IMAGE_NAME}:svm ${DOCKER_REGISTRY}/${IMAGE_NAME}:svm
+                docker push ${DOCKER_REGISTRY}/${IMAGE_NAME}:svm
+                docker tag ${IMAGE_NAME}:vgg ${DOCKER_REGISTRY}/${IMAGE_NAME}:vgg
+                docker push ${DOCKER_REGISTRY}/${IMAGE_NAME}:vgg
+                '''
+            }
+        }
+
+        stage('Déploiement') {
+            steps {
+                echo 'Démarrage des conteneurs Docker...'
+                sh '''
+                docker run -d --name svm_service -p 8501:8501 ${IMAGE_NAME}:svm
+                docker run -d --name vgg_service -p 5002:5002 ${IMAGE_NAME}:vgg
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Pipeline exécuté avec succès!'
+        }
+        failure {
+            echo 'Le pipeline a échoué. Vérifiez les journaux pour plus de détails.'
+        }
+    }
+}
