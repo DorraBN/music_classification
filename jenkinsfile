@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         IMAGE_NAME = "music-genre-classification"
-        DOCKER_REGISTRY = "your-docker-registry" // Remplacez par votre registre Docker, si applicable
+        DOCKER_REGISTRY = "your-docker-registry" 
     }
 
     stages {
